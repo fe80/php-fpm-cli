@@ -22,24 +22,38 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 # THE SOFTWARE.
 
+# Default variable
+
+PHPFPMCLI_FILE="/tmp/php-fpm-cli.$$.php"
+CONN="/var/run/php5-fpm.sock"
+PHPCODE=""
+METHOD='GET'
+
+
+# Functions
+
 usage() {
     cat <<USAGE
 Usage: $(basename $0) [-connect CONN] -r <code>
 
 Options:
-     -connect CONN    Passed to cgi-fcgi, default: /var/run/php5-fpm.sock
-                      examples: ip.add.re.ss:port or /path/to/php-fpm.sock
+     -c|--connect CONN    Passed to cgi-fcgi, default: /var/run/php5-fpm.sock
+                          examples: ip.add.re.ss:port or /path/to/php-fpm.sock
 
-     -r <code>        Run PHP <code> without using script tags <?..?>
+     -r <code>            Run PHP <code> without using script tags <?..?>
+
+     -f <file>            Run PHP <file> content with using script tags <?..?>
+
+     -p                   Define POST REQUEST_METHOD (default value GET)
 
 USAGE
 }
 
 main() {
-    echo "<?php $PHPCODE" > $PHPFPMCLI_FILE
+    echo "${PHPCODE}" > $PHPFPMCLI_FILE
     SCRIPT_FILENAME=$PHPFPMCLI_FILE \
-    REQUEST_METHOD=GET \
-    cgi-fcgi -bind -connect "$CONN" | stripheaders
+    REQUEST_METHOD=$METHOD \
+    cgi-fcgi -bind -connect "${CONN}" | stripheaders
     rm $PHPFPMCLI_FILE
 }
 
@@ -47,15 +61,16 @@ stripheaders() {
     sed -E '1,/^.$/ d'
 }
 
-PHPFPMCLI_FILE="/tmp/php-fpm-cli.$$.php"
-CONN="/var/run/php5-fpm.sock"
-PHPCODE=""
 init() {
-  until [ -z "$1" ]; do
+  until [ -z "${1}" ]; do
     case "$1" in
-      -connect|--connect) shift; CONN="$1"; shift; ;;
+      -connect|--connect|-c) shift; CONN=$1; shift; ;;
 
-      -r) shift; PHPCODE="$1"; shift; ;;
+      -r) shift; PHPCODE="<?php ${1}"; shift; ;;
+
+      -f) shift; PHPCODE=$(cat $1); shift; ;;
+
+      -p) METHOD='POST'; shift; ;;
 
       help|-h|-help|--help)
         usage;
@@ -63,17 +78,22 @@ init() {
         ;;
 
       *)
-        echo "unknown option: $1";
+        echo "unknown option: ${1}";
         usage;
         exit 1
         ;;
     esac
   done
-  if [ -z "$PHPCODE" ]; then
+  if [ -z "${PHPCODE}" ]; then
     echo "missing option: -r <code>";
     usage;
     exit 1
   fi
 }
 
-init "$@" && main
+
+# Main program
+
+init "${@}" && main
+
+exit
